@@ -11,7 +11,10 @@ create table users (
 create table repos (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references users(id) on delete cascade,
-  github_repo_id bigint unique not null,
+  -- Unique per user: two accounts may legitimately sync the same repo
+  -- (orgs, collaborator repos). A global unique here caused cross-tenant
+  -- loss — see migrations/001_foundations.sql.
+  github_repo_id bigint not null,
   name text not null,
   full_name text not null,
   description text,
@@ -20,7 +23,8 @@ create table repos (
   is_auto_watched boolean default false,
   is_manually_watched boolean default false,
   last_pushed_at timestamptz,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  unique (user_id, github_repo_id)
 );
 
 create index idx_repos_user_id on repos(user_id);
@@ -31,7 +35,9 @@ create table scan_results (
   security_score int,
   code_quality_score int,
   docs_rating text,
+  docs_reasoning text,
   tests_rating text,
+  tests_reasoning text,
   findings jsonb default '[]',
   scanned_at timestamptz default now()
 );
@@ -45,6 +51,7 @@ create table alerts (
   message text not null,
   severity text default 'warning',
   resolved boolean default false,
+  resolved_at timestamptz,
   created_at timestamptz default now()
 );
 
@@ -65,4 +72,14 @@ create table device_tokens (
   user_id uuid references users(id) on delete cascade,
   fcm_token text unique not null,
   created_at timestamptz default now()
+);
+
+-- Server-backed notification preferences (see migrations/001_foundations.sql).
+create table user_settings (
+  user_id uuid primary key references users(id) on delete cascade,
+  notify_enabled boolean not null default true,
+  notify_on_new_issue boolean not null default true,
+  notify_on_score_drop boolean not null default true,
+  alert_threshold int not null default 10,
+  updated_at timestamptz not null default now()
 );

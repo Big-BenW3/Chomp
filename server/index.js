@@ -19,6 +19,7 @@ import { reposRouter } from './routes/repos.js';
 import { scanRouter } from './routes/scan.js';
 import { feedRouter } from './routes/feed.js';
 import { notificationsRouter } from './routes/notifications.js';
+import { settingsRouter } from './routes/settings.js';
 import { internalCronRouter } from './routes/internalCron.js';
 import { webhookRouter } from './routes/webhooks.js';
 import { generalLimiter, authLimiter, scanLimiter } from './middleware/rateLimiter.js';
@@ -34,13 +35,14 @@ const app = express();
 // limiting keys off the real client IP rather than the proxy's.
 app.set('trust proxy', 1);
 
-// CORS. Native mobile clients are unaffected, but this keeps a future web
-// front-end working. Restrict origins via CORS_ORIGIN (comma-separated);
-// defaults to reflecting the request origin.
-const corsOrigin = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
-  : true;
-app.use(cors({ origin: corsOrigin, credentials: true }));
+// CORS. Native mobile clients are unaffected (no Origin header). In
+// production, origins must be explicitly allowed via CORS_ORIGIN
+// (comma-separated); with none configured, browser requests are rejected,
+// which is the safe default (no reflected-origin-with-credentials hole).
+const corsOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean)
+  : [];
+app.use(cors({ origin: corsOrigins.length > 0 ? corsOrigins : false, credentials: true }));
 
 // Parse JSON request bodies (limit to bound memory usage).
 app.use(express.json({ limit: '1mb' }));
@@ -58,6 +60,7 @@ app.use(reposRouter);
 app.use(scanRouter);
 app.use(feedRouter);
 app.use(notificationsRouter);
+app.use(settingsRouter);
 app.use(internalCronRouter);
 // Webhook needs the RAW body to verify GitHub's HMAC signature, so the
 // raw parser must run for this path (it overwrites the JSON parse above).

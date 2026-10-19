@@ -79,6 +79,13 @@ class ApiClient {
     return _handle(res);
   }
 
+  /// Sends an authenticated PUT request with a JSON body.
+  Future<dynamic> put(String path, Map<String, dynamic> body) async {
+    final res = await http.put(_uri(path),
+        headers: await _authHeaders(), body: jsonEncode(body));
+    return _handle(res);
+  }
+
   /// Handles the HTTP response, throwing [ApiException] on error.
   ///
   /// Extracts a user-friendly error message from the response body

@@ -11,6 +11,11 @@ import 'package:flutter/material.dart';
 import '../core/theme.dart';
 import '../services/scan_engine.dart';
 
+/// Whether the OS asks for reduced motion. Ambient and repeating
+/// animation (auto-scroll, staggered slides) should respect it.
+bool prefersReducedMotion(BuildContext context) =>
+    MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+
 class ScanLogView extends StatefulWidget {
   const ScanLogView({super.key, required this.entries});
 
@@ -29,6 +34,12 @@ class _ScanLogViewState extends State<ScanLogView> {
     if (old.entries.length != widget.entries.length) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!_scroll.hasClients) return;
+        // Reduced motion: jump straight to the newest line instead of
+        // animating a scroll the user asked not to see.
+        if (prefersReducedMotion(context)) {
+          _scroll.jumpTo(_scroll.position.maxScrollExtent);
+          return;
+        }
         _scroll.animateTo(
           _scroll.position.maxScrollExtent,
           duration: AppMotion.standard,

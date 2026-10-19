@@ -13,7 +13,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { query } from '../db.js';
 import { decryptToken } from '../lib/crypto.js';
-import { fetchRepos } from '../lib/githubClient.js';
+import { fetchRepos, fetchCommits } from '../lib/githubClient.js';
 import { AUTO_WATCH_COUNT, MAX_MANUAL_WATCHLIST } from '../lib/constants.js';
 
 export const reposRouter = Router();
@@ -40,7 +40,7 @@ reposRouter.post('/github/sync-repos', requireAuth, async (req, res) => {
       await query(
         `insert into repos (user_id, github_repo_id, name, full_name, description, language, default_branch, is_auto_watched, last_pushed_at)
          values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-         on conflict (github_repo_id) do update set
+         on conflict (user_id, github_repo_id) do update set
            name = excluded.name,
            full_name = excluded.full_name,
            description = excluded.description,
@@ -126,9 +126,15 @@ reposRouter.get('/repos/:id/scans', requireAuth, asyncHandler(async (req, res) =
   if (!Number.isFinite(limit) || limit <= 0) {
     return res.status(400).json({ error: 'Invalid limit' });
   }
+  // Join through repos so the query is scoped to the caller: scan_results
+  // has no user_id of its own, so without this filter any authenticated
+  // user who learned another user's repo id could read their scan history.
   const result = await query(
-    'select * from scan_results where repo_id = $1 order by scanned_at desc limit $2',
-    [req.params.id, limit],
+    `select s.* from scan_results s
+       join repos r on r.id = s.repo_id
+      where s.repo_id = $1 and r.user_id = $2
+      order by s.scanned_at desc limit $3`,
+    [req.params.id, req.userId, limit],
   );
   res.json({ scans: result.rows });
 }));
@@ -138,10 +144,90 @@ reposRouter.get('/repos/:id/scans', requireAuth, asyncHandler(async (req, res) =
 /// @route GET /repos/:id/alerts
 /// @returns {Object} List of alerts
 reposRouter.get('/repos/:id/alerts', requireAuth, asyncHandler(async (req, res) => {
-  const result = await query('select * from alerts where repo_id = $1 order by created_at desc', [
-    req.params.id,
-  ]);
+  // Scope through repos so alerts belong to the caller (see /scans).
+  const result = await query(
+    `select a.* from alerts a
+       join repos r on r.id = a.repo_id
+      where a.repo_id = $1 and r.user_id = $2
+      order by a.created_at desc`,
+    [req.params.id, req.userId],
+  );
   res.json({ alerts: result.rows });
+}));
+
+/// Mark an alert resolved.
+///
+/// @route POST /repos/:id/alerts/:alertId/resolve
+/// @returns {Object} The updated alert
+reposRouter.post('/repos/:id/alerts/:alertId/resolve', requireAuth, asyncHandler(async (req, res) => {
+  const result = await query(
+    `update alerts a set resolved = true, resolved_at = now()
+        from repos r
+       where a.id = $1 and a.repo_id = r.id and r.id = $2 and r.user_id = $3
+       returning a.*`,
+    [req.params.alertId, req.params.id, req.userId],
+  );
+  if (result.rows.length === 0) return res.status(404).json({ error: 'Alert not found' });
+  res.json({ alert: result.rows[0] });
+}));
+
+/// Re-open an alert (unresolve).
+///
+/// @route POST /repos/:id/alerts/:alertId/unresolve
+/// @returns {Object} The updated alert
+reposRouter.post('/repos/:id/alerts/:alertId/unresolve', requireAuth, asyncHandler(async (req, res) => {
+  const result = await query(
+    `update alerts a set resolved = false, resolved_at = null
+        from repos r
+       where a.id = $1 and a.repo_id = r.id and r.id = $2 and r.user_id = $3
+       returning a.*`,
+    [req.params.alertId, req.params.id, req.userId],
+  );
+  if (result.rows.length === 0) return res.status(404).json({ error: 'Alert not found' });
+  res.json({ alert: result.rows[0] });
+}));
+
+/// Get recent commit activity for a repository.
+///
+/// Returns one bucket per day with a commit count — ready for the
+/// client heatmap. Bucketing happens server-side so the payload stays
+/// small and any future client can trust a stable shape.
+///
+/// @route GET /repos/:id/commits?days=30
+/// @returns {Object} { activity: [{date: 'YYYY-MM-DD', count}], total }
+reposRouter.get('/repos/:id/commits', requireAuth, asyncHandler(async (req, res) => {
+  const days = Number(req.query.days ?? 30);
+  if (!Number.isFinite(days) || days <= 0 || days > 90) {
+    return res.status(400).json({ error: 'Invalid days (1-90)' });
+  }
+  // Verify ownership before touching GitHub.
+  const repoRow = (
+    await query('select * from repos where id = $1 and user_id = $2', [req.params.id, req.userId])
+  ).rows[0];
+  if (!repoRow) return res.status(404).json({ error: 'Repo not found' });
+
+  const userRow = await query('select access_token_encrypted from users where id = $1', [req.userId]);
+  if (userRow.rows.length === 0) return res.status(401).json({ error: 'Unauthorized' });
+  const accessToken = decryptToken(userRow.rows[0].access_token_encrypted);
+
+  const commits = await fetchCommits(accessToken, repoRow.full_name, { days });
+
+  // Bucket by local commit date. Cap each day's displayed count at a
+  // sane max so a single huge day doesn't blow the heatmap scale.
+  const MAX_PER_DAY = 30;
+  const byDay = new Map();
+  let total = 0;
+  for (const c of commits) {
+    const date = (c?.commit?.committer?.date ?? c?.commit?.author?.date ?? '')?.slice(0, 10);
+    if (!date) continue;
+    byDay.set(date, Math.min((byDay.get(date) ?? 0) + 1, MAX_PER_DAY));
+    total += 1;
+  }
+  const activity = [...byDay.entries()]
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+  res.json({ activity, total });
 }));
 
 /// Converts a database row to a JSON-serializable repo object.

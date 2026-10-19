@@ -1,8 +1,9 @@
 /// Notification settings.
 ///
-/// Toggles for new-issue and score-drop alerts, plus a segmented
-/// threshold picker. Preferences stay in-memory until a `/settings`
-/// endpoint exists — noted on screen so it's not a silent surprise.
+/// Toggles for push, new-issue and score-drop alerts, plus a segmented
+/// threshold picker. All of it persists to the backend (`/settings`)
+/// and is enforced by the hourly scan pipeline — the threshold picked
+/// here is the one the server actually uses.
 
 library;
 
@@ -10,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../providers/settings_provider.dart';
+import '../../widgets/chomp_card.dart';
 
 class NotificationSettingsScreen extends ConsumerWidget {
   const NotificationSettingsScreen({super.key});
@@ -19,64 +21,50 @@ class NotificationSettingsScreen extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
     final scheme = Theme.of(context).colorScheme;
-    final tokens = Theme.of(context).extension<AppTokens>()!;
+    final disabled = !settings.notificationsEnabled;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Notifications')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
-          Container(
-            padding: const EdgeInsets.all(1.5),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadius.shell),
-              border: Border.all(color: scheme.outline),
-              color: tokens.surfaceHigh.withValues(alpha: 0.5),
-            ),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AppRadius.card),
-                color: tokens.surface,
-              ),
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('New issues'),
-                    subtitle:
-                        const Text('Alert when a scan finds something new'),
-                    value: settings.notifyOnNewIssue,
-                    onChanged: notifier.setNotifyOnNewIssue,
-                  ),
-                  Divider(color: scheme.outline, height: 1),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Score drops'),
-                    subtitle:
-                        const Text('Alert when a security score falls hard'),
-                    value: settings.notifyOnScoreDrop,
-                    onChanged: notifier.setNotifyOnScoreDrop,
-                  ),
-                ],
-              ),
+          ChompCard(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Push notifications'),
+                  subtitle:
+                      const Text('Master switch for pushes to this device'),
+                  value: settings.notificationsEnabled,
+                  onChanged: notifier.setNotificationsEnabled,
+                ),
+                Divider(color: scheme.outline, height: 1),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('New issues'),
+                  subtitle:
+                      const Text('Alert when a scan finds something new'),
+                  value: disabled ? false : settings.notifyOnNewIssue,
+                  onChanged: disabled ? null : notifier.setNotifyOnNewIssue,
+                ),
+                Divider(color: scheme.outline, height: 1),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Score drops'),
+                  subtitle:
+                      const Text('Alert when a security score falls hard'),
+                  value: disabled ? false : settings.notifyOnScoreDrop,
+                  onChanged: disabled ? null : notifier.setNotifyOnScoreDrop,
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(1.5),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadius.shell),
-              border: Border.all(color: scheme.outline),
-              color: tokens.surfaceHigh.withValues(alpha: 0.5),
-            ),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AppRadius.card),
-                color: tokens.surface,
-              ),
-              child: Column(
+          ChompCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -146,12 +134,11 @@ class NotificationSettingsScreen extends ConsumerWidget {
                     ),
                   ),
                 ],
-              ),
             ),
           ),
           const SizedBox(height: 16),
           Text(
-            'Preferences currently live for this session only - persistence ships with the settings backend.',
+            'Synced to your account — the hourly scan uses these settings when deciding what to push.',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: scheme.onSurface.withValues(alpha: 0.4),
                 ),

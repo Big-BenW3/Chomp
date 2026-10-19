@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "cron": "node cron/standalone.js"
+    "cron": "node cron/standalone.js",
+    "migrate": "node migrations/run.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

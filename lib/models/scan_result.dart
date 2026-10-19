@@ -63,8 +63,14 @@ class ScanResult {
   /// Documentation quality rating from Groq.
   final QualitativeRating? docsRating;
 
+  /// One-sentence Groq rationale for the docs rating.
+  final String? docsReasoning;
+
   /// Test coverage rating from Groq.
   final QualitativeRating? testsRating;
+
+  /// One-sentence Groq rationale for the tests rating.
+  final String? testsReasoning;
 
   /// List of specific findings/issues discovered during the scan.
   final List<String> findings;
@@ -78,7 +84,9 @@ class ScanResult {
     this.securityScore,
     this.codeQualityScore,
     this.docsRating,
+    this.docsReasoning,
     this.testsRating,
+    this.testsReasoning,
     this.findings = const [],
     required this.scannedAt,
   });
@@ -95,12 +103,22 @@ class ScanResult {
         docsRating: json['docs_rating'] != null
             ? QualitativeRatingX.fromLabel(json['docs_rating'] as String)
             : null,
+        docsReasoning: _cleanReasoning(json['docs_reasoning']),
         testsRating: json['tests_rating'] != null
             ? QualitativeRatingX.fromLabel(json['tests_rating'] as String)
             : null,
+        testsReasoning: _cleanReasoning(json['tests_reasoning']),
         findings: (json['findings'] as List<dynamic>? ?? [])
             .map((e) => e.toString())
             .toList(),
         scannedAt: DateTime.parse(json['scanned_at'] as String),
       );
+
+  /// Normalizes a reasoning string: blank becomes null so the UI can
+  /// treat it as absent.
+  static String? _cleanReasoning(dynamic raw) {
+    if (raw is! String) return null;
+    final s = raw.trim();
+    return s.isEmpty ? null : s;
+  }
 }

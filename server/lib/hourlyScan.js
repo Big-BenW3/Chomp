@@ -10,7 +10,7 @@
 
 import { query } from '../db.js';
 import { decryptToken } from './crypto.js';
-import { scanRepo } from './scanRepo.js';
+import { scanRepo, isScanRunning } from './scanRepo.js';
 
 /// Runs a full scan of all watched repositories.
 ///
@@ -26,9 +26,18 @@ export async function runHourlyScan() {
      where r.is_auto_watched = true or r.is_manually_watched = true`,
   );
 
-  const results = { scanned: 0, failed: 0 };
+  const results = { scanned: 0, failed: 0, skipped: 0 };
   for (const repoRow of watched.rows) {
+    // A repo already being scanned by a manual request (or vice versa)
+    // is skipped, not failed — the earlier scan's output covers it.
+    if (isScanRunning(repoRow.id)) {
+      results.skipped += 1;
+      continue;
+    }
     try {
+      // Only skim repos with a data-bearing user: a user who disabled
+      // notifications entirely still gets scans (feed/alerts), but the
+      // push path inside scanRepo reads their settings and stays quiet.
       const accessToken = decryptToken(repoRow.access_token_encrypted);
       await scanRepo(repoRow, accessToken);
       results.scanned += 1;

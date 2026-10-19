@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/theme.dart';
 import '../models/feed_item.dart';
 import '../utils/time.dart';
+import 'chomp_card.dart';
 
 class FeedItemTile extends StatelessWidget {
   const FeedItemTile({super.key, required this.item});
@@ -40,33 +41,24 @@ class FeedItemTile extends StatelessWidget {
           ),
       };
 
+  /// Opens the item's GitHub page. No-op when the item has no link.
+  void openGithub() {
+    final url = item.githubUrl;
+    if (url == null) return;
+    launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final tokens = Theme.of(context).extension<AppTokens>()!;
     final style = _style;
 
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-      padding: const EdgeInsets.all(1.5),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.shell),
-        border: Border.all(color: scheme.outline),
-        color: style.tint != null
-            ? style.tint!.withValues(alpha: 0.06)
-            : tokens.surfaceHigh.withValues(alpha: 0.5),
-      ),
-      child: Material(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: item.githubUrl == null
-              ? null
-              : () => launchUrl(Uri.parse(item.githubUrl!),
-                  mode: LaunchMode.externalApplication),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
+      child: ChompCard(
+        onTap: openGithub,
+        tint: style.tint?.withValues(alpha: 0.06),
+        padding: const EdgeInsets.all(14),
             child: Row(
               children: [
                 Container(
@@ -109,8 +101,6 @@ class FeedItemTile extends StatelessWidget {
               ],
             ),
           ),
-        ),
-      ),
-    );
+      );
   }
 }

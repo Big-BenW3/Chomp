@@ -1,6 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Networking permission: the app talks to the Chomp API, GitHub, and
+         FCM. Without this in the MAIN manifest, release builds lose all
+         networking (the debug manifest alone is not enough). -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="dev_watch"
+        android:label="Chomp"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

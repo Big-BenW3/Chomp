@@ -11,6 +11,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/settings_provider.dart';
+import '../../models/user.dart';
+import '../../widgets/chomp_card.dart';
 import '../../widgets/reveal.dart';
 import 'notification_settings_screen.dart';
 import 'watchlist_manager_screen.dart';
@@ -22,7 +24,6 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authProvider);
     final scheme = Theme.of(context).colorScheme;
-    final tokens = Theme.of(context).extension<AppTokens>()!;
 
     return Scaffold(
       appBar: AppBar(
@@ -37,49 +38,36 @@ class ProfileScreen extends ConsumerWidget {
         children: [
           // Identity header.
           Reveal(
-            child: Container(
-              padding: const EdgeInsets.all(1.5),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AppRadius.shell),
-                border: Border.all(color: scheme.outline),
-                color: tokens.surfaceHigh.withValues(alpha: 0.5),
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AppRadius.card),
-                  color: tokens.surface,
-                ),
-                child: Row(
-                  children: [
-                    _Avatar(user: auth.user),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            auth.user?.githubUsername ?? 'GitHub user',
-                            style: Theme.of(context).textTheme.headlineSmall,
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            auth.user == null
-                                ? 'Restore session on next sign-in'
-                                : 'GitHub connected',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                                  color:
-                                      scheme.onSurface.withValues(alpha: 0.5),
-                                ),
-                          ),
-                        ],
-                      ),
+            child: ChompCard(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  _Avatar(user: auth.user),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          auth.user?.githubUsername ?? 'GitHub user',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          auth.user == null
+                              ? 'Restore session on next sign-in'
+                              : 'GitHub connected',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                color: scheme.onSurface.withValues(alpha: 0.5),
+                              ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -239,12 +227,12 @@ class ProfileScreen extends ConsumerWidget {
 class _Avatar extends StatelessWidget {
   const _Avatar({required this.user});
 
-  final dynamic user;
+  final ChompUser? user;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final url = user?.avatarUrl as String?;
+    final url = user?.avatarUrl;
 
     Widget inner;
     if (url != null && url.isNotEmpty) {

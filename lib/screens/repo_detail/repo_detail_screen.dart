@@ -10,7 +10,9 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
+import '../../models/alert.dart';
 import '../../models/repo.dart';
+import '../../models/scan_result.dart';
 import '../../providers/scan_provider.dart';
 import '../../providers/repo_provider.dart';
 import '../../widgets/alert_tile.dart';
@@ -24,6 +26,12 @@ final _alertsProvider =
     FutureProvider.autoDispose.family((ref, String repoId) async {
   final data = ref.watch(chompDataServiceProvider);
   return data.getAlerts(repoId);
+});
+
+final _commitsProvider = FutureProvider.autoDispose
+    .family((ref, String repoId) async {
+  final data = ref.watch(chompDataServiceProvider);
+  return data.getCommitActivity(repoId);
 });
 
 class RepoDetailScreen extends ConsumerStatefulWidget {
@@ -41,6 +49,17 @@ class _RepoDetailScreenState extends ConsumerState<RepoDetailScreen> {
     super.initState();
     Future.microtask(
         () => ref.read(scanProvider.notifier).loadLatest(widget.repo.id));
+
+    // A completed scan can mint alerts or, hours later, fresh commit
+    // activity — refresh the downstream panels when a scan settles.
+    ref.listenManual(scanProvider, (previous, next) {
+      final prevRepo = previous?[widget.repo.id];
+      final nextRepo = next[widget.repo.id];
+      if (prevRepo?.isScanning == true && nextRepo?.isScanning == false) {
+        ref.invalidate(_alertsProvider(widget.repo.id));
+        ref.invalidate(_commitsProvider(widget.repo.id));
+      }
+    });
   }
 
   @override
@@ -87,8 +106,15 @@ class _RepoDetailScreenState extends ConsumerState<RepoDetailScreen> {
               ],
             ),
           ),
-          // Commit activity placeholder.
-          Reveal(delayMs: 300, child: HeatmapStrip(repoId: widget.repo.id)),
+          // Commit activity (real data from GitHub).
+          Reveal(
+              delayMs: 300,
+              child: HeatmapStrip(
+                  activity: ref.watch(_commitsProvider(widget.repo.id)))),
+          // AI reasoning for the qualitative ratings.
+          if (result?.docsReasoning != null ||
+              (result?.testsReasoning != null))
+            Reveal(delayMs: 320, child: _ReasoningCard(result: result)),
           // Description.
           Reveal(
             delayMs: 360,
@@ -113,7 +139,9 @@ class _RepoDetailScreenState extends ConsumerState<RepoDetailScreen> {
             ),
           ),
           // Alerts.
-          Reveal(delayMs: 420, child: _AlertsSection(alerts: alerts)),
+          Reveal(
+              delayMs: 420,
+              child: _AlertsSection(repoId: widget.repo.id, alerts: alerts)),
           const SizedBox(height: 28),
           // Scan action.
           _ScanButton(
@@ -166,14 +194,40 @@ class _RepoDetailScreenState extends ConsumerState<RepoDetailScreen> {
   }
 }
 
-class _AlertsSection extends StatelessWidget {
-  const _AlertsSection({required this.alerts});
+class _AlertsSection extends ConsumerWidget {
+  const _AlertsSection({required this.repoId, required this.alerts});
 
+  final String repoId;
   final AsyncValue alerts;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
+
+    /// Flips an alert's resolved state server-side, then refreshes the
+    /// feed-level provider so the tile lands in its new state.
+    Future<void> resolve(ChompAlert alert, bool resolved) async {
+      try {
+        final data = ref.read(chompDataServiceProvider);
+        if (resolved) {
+          await data.resolveAlert(repoId, alert.id);
+        } else {
+          await data.unresolveAlert(repoId, alert.id);
+        }
+        ref.invalidate(_alertsProvider(repoId));
+      } catch (_) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              behavior: SnackBarBehavior.floating,
+              content: Text(
+                resolved ? 'Could not resolve alert — try again.' : 'Could not re-open alert — try again.',
+              ),
+            ),
+          );
+        }
+      }
+    }
 
     Widget body = alerts.when(
       loading: () => const SizedBox(
@@ -182,12 +236,22 @@ class _AlertsSection extends StatelessWidget {
       ),
       error: (e, _) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Text(
-          'Could not load alerts.',
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: scheme.onSurface.withValues(alpha: 0.5)),
+        child: Row(
+          children: [
+            Text(
+              'Could not load alerts.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: scheme.onSurface.withValues(alpha: 0.5)),
+            ),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: () => ref.invalidate(_alertsProvider(repoId)),
+              icon: const Icon(Icons.refresh_rounded, size: 16),
+              label: const Text('Retry'),
+            ),
+          ],
         ),
       ),
       data: (items) => items.isEmpty
@@ -205,7 +269,7 @@ class _AlertsSection extends StatelessWidget {
                       size: 26),
                   const SizedBox(height: 8),
                   Text(
-                    'All quiet there are no alerts',
+                    'All quiet — there are no alerts.',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 4),
@@ -222,7 +286,10 @@ class _AlertsSection extends StatelessWidget {
           : Column(
               children: [
                 for (final alert in items) ...[
-                  AlertTile(alert: alert),
+                  AlertTile(
+                    alert: alert,
+                    onToggleResolve: () => resolve(alert, !alert.resolved),
+                  ),
                   const SizedBox(height: 8),
                 ],
               ],
@@ -244,6 +311,71 @@ class _AlertsSection extends StatelessWidget {
         ),
         body,
       ],
+    );
+  }
+}
+
+/// The AI's one-line rationale under the Docs/Tests badges. Groq
+/// returned this all along; it used to be thrown away.
+class _ReasoningCard extends StatelessWidget {
+  const _ReasoningCard({required this.result});
+
+  final ScanResult? result;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final docs = result?.docsReasoning;
+    final tests = result?.testsReasoning;
+    if (docs == null && tests == null) return const SizedBox.shrink();
+
+    final rows = [
+      if (docs != null) ('DOCS', docs),
+      if (tests != null) ('TESTS', tests),
+    ];
+
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHigh
+            .withValues(alpha: 0.4),
+        border: Border.all(
+            color: scheme.outline.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final (label, text) in rows) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurface.withValues(alpha: 0.45),
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurface.withValues(alpha: 0.75),
+                          height: 1.4,
+                        ),
+                  ),
+                ),
+              ],
+            ),
+            if (label != rows.last.$1) const SizedBox(height: 10),
+          ],
+        ],
+      ),
     );
   }
 }

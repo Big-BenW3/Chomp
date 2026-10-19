@@ -147,7 +147,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen>
                       ),
                       const SizedBox(height: 20),
                       Text(
-                        'Secure OAuth - your GitHub token never touches this device.',
+                        'Secure OAuth — your GitHub token never touches this device.',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                               color: scheme.onSurface.withValues(alpha: 0.35),

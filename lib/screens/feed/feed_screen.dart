@@ -51,7 +51,7 @@ class FeedScreen extends ConsumerWidget {
                   icon: Icons.bolt_rounded,
                   title: 'All quiet',
                   subtitle:
-                      'The feed fills when Chomp scans your watched repos - new findings, score changes and activity land here.',
+                      'The feed fills when Chomp scans your watched repos — new findings, score changes and activity land here.',
                 )
               : ListView.builder(
                   physics: const AlwaysScrollableScrollPhysics(),

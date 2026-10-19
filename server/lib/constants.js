@@ -26,6 +26,11 @@ export function assertRequiredSecrets() {
     'CRYPTO_SECRET',
     'CRON_SECRET',
     'GITHUB_WEBHOOK_SECRET',
+    'GITHUB_CLIENT_ID',
+    'GITHUB_CLIENT_SECRET',
+    'NVIDIA_API_KEY',
+    'GROQ_API_KEY',
+    'FIREBASE_SERVICE_ACCOUNT_JSON',
   ];
   const missing = required.filter((key) => !process.env[key]);
   if (missing.length > 0) {

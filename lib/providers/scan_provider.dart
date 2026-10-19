@@ -11,6 +11,7 @@
 library;
 
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/scan_result.dart';
 import '../services/scan_engine.dart';
@@ -95,9 +96,13 @@ class ScanNotifier extends StateNotifier<Map<String, RepoScanState>> {
           next = next.copyWith(
               isScanning: false,
               latestResult: ScanResult.fromJson(event.payload!));
+          // Physical confirmation — the scan finished and the gauges
+          // are about to re-sweep. Subtle, not celebratory.
+          HapticFeedback.mediumImpact();
         }
         if (event.phase == ScanPhase.error) {
           next = next.copyWith(isScanning: false, error: event.message);
+          HapticFeedback.heavyImpact();
         }
         _update(repoId, next);
       },

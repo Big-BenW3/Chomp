@@ -8,9 +8,11 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
 import '../models/repo.dart';
 import '../utils/time.dart';
+import 'chomp_card.dart';
 
 class RepoCard extends StatelessWidget {
   const RepoCard({super.key, required this.repo, this.onTap});
@@ -21,23 +23,12 @@ class RepoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final tokens = Theme.of(context).extension<AppTokens>()!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-      padding: const EdgeInsets.all(1.5),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppRadius.shell),
-        color: tokens.surfaceHigh.withValues(alpha: 0.5),
-        border: Border.all(color: scheme.outline),
-      ),
-      child: Material(
-        color: tokens.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
+      child: ChompCard(
+        onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -57,11 +48,12 @@ class RepoCard extends StatelessWidget {
                         repo.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontFamily: 'Space Grotesk',
-                                  fontWeight: FontWeight.w700,
-                                ),
+                        style: GoogleFonts.spaceGrotesk(
+                          fontSize: 15,
+                          height: 1.3,
+                          fontWeight: FontWeight.w700,
+                          color: scheme.onSurface,
+                        ),
                       ),
                       if (repo.description != null) ...[
                         const SizedBox(height: 4),
@@ -117,7 +109,6 @@ class RepoCard extends StatelessWidget {
             ),
           ),
         ),
-      ),
     );
   }
 }
@@ -153,11 +144,11 @@ class _LanguageTile extends StatelessWidget {
       alignment: Alignment.center,
       child: Text(
         code,
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontFamily: 'Space Grotesk',
-              fontWeight: FontWeight.w700,
-              color: AppColors.brand,
-            ),
+        style: GoogleFonts.spaceGrotesk(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          color: AppColors.brand,
+        ),
       ),
     );
   }

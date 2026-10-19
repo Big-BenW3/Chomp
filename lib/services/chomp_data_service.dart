@@ -14,6 +14,7 @@ import '../models/repo.dart';
 import '../models/scan_result.dart';
 import '../models/alert.dart';
 import '../models/feed_item.dart';
+import '../models/commit_activity.dart';
 import 'api_client.dart';
 
 /// Service for reading app data via the backend API.
@@ -88,4 +89,32 @@ class ChompDataService {
   /// Removes a repository from the user's manual watchlist.
   Future<void> removeFromWatchlist(String repoId) =>
       _api.post('/repos/$repoId/unwatch', {});
+
+  /// Fetches recent commit activity for a repository.
+  ///
+  /// [days] is the look-back window (1-90, default 30).
+  Future<CommitActivity> getCommitActivity(String repoId, {int days = 30}) async {
+    final res = await _api.get('/repos/$repoId/commits?days=$days')
+        as Map<String, dynamic>;
+    return CommitActivity.fromJson(res);
+  }
+
+  /// Marks an alert resolved.
+  ///
+  /// Returns the updated alert so callers can keep optimistic state in
+  /// sync with the server.
+  Future<ChompAlert> resolveAlert(String repoId, String alertId) async {
+    final res =
+        await _api.post('/repos/$repoId/alerts/$alertId/resolve', {})
+            as Map<String, dynamic>;
+    return ChompAlert.fromJson(res['alert'] as Map<String, dynamic>);
+  }
+
+  /// Re-opens a previously resolved alert.
+  Future<ChompAlert> unresolveAlert(String repoId, String alertId) async {
+    final res =
+        await _api.post('/repos/$repoId/alerts/$alertId/unresolve', {})
+            as Map<String, dynamic>;
+    return ChompAlert.fromJson(res['alert'] as Map<String, dynamic>);
+  }
 }

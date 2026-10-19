@@ -95,7 +95,12 @@ class _RadialGaugeState extends State<RadialGauge>
                   track: tokens.surfaceHigh.withValues(alpha: 0.35),
                 ),
                 child: Center(
-                  child: Column(
+                  child: Semantics(
+                    label: v == null
+                        ? 'No ${widget.label.toLowerCase()} score yet'
+                        : '${widget.label.toLowerCase()} score $v out of 100',
+                    child: ExcludeSemantics(
+                      child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (v == null)
@@ -129,6 +134,8 @@ class _RadialGaugeState extends State<RadialGauge>
                             ),
                       ),
                     ],
+                      ),
+                    ),
                   ),
                 ),
               ),

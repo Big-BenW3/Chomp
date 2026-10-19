@@ -29,6 +29,13 @@ class AuthService {
   /// Throws [StateError] if GitHub doesn't return an authorization code.
   Future<ChompUser> signInWithGitHub() async {
     // Build GitHub OAuth authorization URL
+    //
+    // Scope note: classic GitHub OAuth has no read-only scope that
+    // covers private repos — `public_repo` would silently hide every
+    // private repository, which are half the point of scanning. `repo`
+    // grants more access than strictly needed, but it's the only way
+    // to see private repos; the token lives only on our backend (AES
+    // encrypted), never on the device.
     final authUrl = Uri.https('github.com', '/login/oauth/authorize', {
       'client_id': Env.githubClientId,
       'scope': 'repo read:user',
@@ -76,6 +83,16 @@ class AuthService {
     }
   }
 
-  /// Signs the user out by clearing the session token.
-  Future<void> signOut() => _api.clearSession();
+  /// Signs the user out: revokes the session server-side, then clears
+  /// the local token. Server revocation bumps token_version so lost or
+  /// cloned JWTs are dead on arrival, and removes this device from the
+  /// push list. Best-effort — local sign-out always proceeds.
+  Future<void> signOut() async {
+    try {
+      await _api.post('/auth/disconnect', {});
+    } catch (_) {
+      // Network/cache issues must not strand the user signed in.
+    }
+    await _api.clearSession();
+  }
 }

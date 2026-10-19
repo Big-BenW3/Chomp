@@ -2,6 +2,7 @@
 ///
 /// Severity reads through a tinted icon chip: critical = red,
 /// warning = amber, info = blue. Resolved alerts dim to a ghost state.
+/// Trailing action resolves / re-opens the alert inline.
 
 library;
 
@@ -11,9 +12,13 @@ import '../models/alert.dart';
 import '../utils/time.dart';
 
 class AlertTile extends StatelessWidget {
-  const AlertTile({super.key, required this.alert});
+  const AlertTile({super.key, required this.alert, this.onToggleResolve});
 
   final ChompAlert alert;
+
+  /// Called when the user taps the resolve/re-open action. Null hides
+  /// the action (e.g. while a bulk operation is running).
+  final VoidCallback? onToggleResolve;
 
   ({IconData icon, Color color}) get _style => switch (alert.severity) {
         AlertSeverity.critical => (
@@ -58,6 +63,24 @@ class AlertTile extends StatelessWidget {
                         ? scheme.onSurface.withValues(alpha: 0.35)
                         : scheme.onSurface.withValues(alpha: 0.85),
                   ),
+            ),
+          ),
+          Container(
+            width: 48,
+            height: 32,
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              onPressed: onToggleResolve,
+              icon: Icon(
+                dimmed ? Icons.redo_rounded : Icons.check_rounded,
+                size: 18,
+              ),
+              color: dimmed
+                  ? scheme.onSurface.withValues(alpha: 0.5)
+                  : AppColors.success,
+              tooltip: dimmed ? 'Re-open alert' : 'Mark resolved',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
             ),
           ),
           const SizedBox(width: 8),

@@ -45,24 +45,67 @@ router.post('/github/webhook', async (req, res) => {
 
   if (!repoFullName) return res.status(200).send('OK');
 
-  const repos = await query(
-    'SELECT id, user_id FROM repos WHERE full_name = $1 AND (is_auto_watched = true OR is_manually_watched = true)',
-    [repoFullName]
-  );
+  try {
+    const repos = await query(
+      'SELECT id, user_id FROM repos WHERE full_name = $1 AND (is_auto_watched = true OR is_manually_watched = true)',
+      [repoFullName]
+    );
 
-  if (repos.rows.length === 0) return res.status(200).send('OK');
-
-  switch (event) {
-    case 'push':
-      const headCommit = payload.head_commit;
-      for (const row of repos.rows) {
-        await query(
-          `INSERT INTO feed_items (user_id, repo_id, type, title, github_url)
-           VALUES ($1, $2, 'commit', $3, $4)`,
-          [row.user_id, row.id, headCommit?.message || 'New push', headCommit?.url]
-        );
+    if (repos.rows.length !== 0) {
+      switch (event) {
+        case 'push':
+          const headCommit = payload.head_commit;
+          for (const row of repos.rows) {
+            await query(
+              `INSERT INTO feed_items (user_id, repo_id, type, title, github_url)
+               VALUES ($1, $2, 'commit', $3, $4)`,
+              [row.user_id, row.id, headCommit?.message || 'New push', headCommit?.url]
+            );
+          }
+          break;
+        case 'pull_request':
+          const pr = payload.pull_request;
+          if (pr) {
+            const action = payload.action ?? 'updated';
+            for (const row of repos.rows) {
+              await query(
+                `INSERT INTO feed_items (user_id, repo_id, type, title, github_url)
+                 VALUES ($1, $2, 'pr', $3, $4)`,
+                [
+                  row.user_id,
+                  row.id,
+                  action === 'opened' ? `New pull request: ${pr.title}` : `Pull request ${action}: ${pr.title}`,
+                  pr.html_url,
+                ]
+              );
+            }
+          }
+          break;
+        case 'issues':
+          const issue = payload.issue;
+          if (issue && !issue.pull_request) {
+            const action = payload.action ?? 'updated';
+            for (const row of repos.rows) {
+              await query(
+                `INSERT INTO feed_items (user_id, repo_id, type, title, github_url)
+                 VALUES ($1, $2, 'issue', $3, $4)`,
+                [
+                  row.user_id,
+                  row.id,
+                  action === 'opened' ? `New issue: ${issue.title}` : `Issue ${action}: ${issue.title}`,
+                  issue.html_url,
+                ]
+              );
+            }
+          }
+          break;
       }
-      break;
+    }
+  } catch (err) {
+    // Express 4 does not catch async rejections — without this try/catch a
+    // failed DB query inside an unhandled promise would crash the process.
+    console.error('webhook handler failed', err);
+    return res.status(500).send('Server error');
   }
 
   res.status(200).send('OK');

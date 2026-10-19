@@ -7,7 +7,7 @@
 import { Router } from 'express';
 import jwt from 'jsonwebtoken';
 import { query } from '../db.js';
-import { encryptToken, decryptToken } from '../lib/crypto.js';
+import { encryptToken } from '../lib/crypto.js';
 import { requireAuth } from '../middleware/auth.js';
 import { exchangeCodeForToken, fetchGitHubUser } from '../lib/githubClient.js';
 
@@ -38,21 +38,27 @@ authRouter.post('/github/oauth/exchange', async (req, res) => {
     if (existing.rows.length > 0) {
       userRow = (
         await query(
-          'update users set access_token_encrypted = $1, github_username = $2 where github_id = $3 returning *',
-          [encryptToken(accessToken), githubUser.login, githubUser.id],
+          'update users set access_token_encrypted = $1, github_username = $2, avatar_url = $3 where github_id = $4 returning *',
+          [encryptToken(accessToken), githubUser.login, githubUser.avatar_url, githubUser.id],
         )
       ).rows[0];
     } else {
       userRow = (
         await query(
-          'insert into users (github_id, github_username, access_token_encrypted) values ($1, $2, $3) returning *',
-          [githubUser.id, githubUser.login, encryptToken(accessToken)],
+          'insert into users (github_id, github_username, access_token_encrypted, avatar_url) values ($1, $2, $3, $4) returning *',
+          [githubUser.id, githubUser.login, encryptToken(accessToken), githubUser.avatar_url],
         )
       ).rows[0];
     }
 
-    // Issue Chomp JWT (30 day expiry)
-    const sessionToken = jwt.sign({ sub: userRow.id }, process.env.SESSION_JWT_SECRET, { expiresIn: '30d' });
+    // Issue Chomp JWT (30 day expiry). The `ver` claim carries the
+    // user's token_version so a disconnect is able to revoke every
+    // outstanding token immediately.
+    const sessionToken = jwt.sign(
+      { sub: userRow.id, ver: userRow.token_version ?? 0 },
+      process.env.SESSION_JWT_SECRET,
+      { expiresIn: '30d' },
+    );
 
     res.json({
       session_token: sessionToken,
@@ -60,7 +66,7 @@ authRouter.post('/github/oauth/exchange', async (req, res) => {
         id: userRow.id,
         github_id: userRow.github_id,
         github_username: userRow.github_username,
-        avatar_url: githubUser.avatar_url,
+        avatar_url: userRow.avatar_url ?? githubUser.avatar_url,
         created_at: userRow.created_at,
       },
     });
@@ -70,10 +76,33 @@ authRouter.post('/github/oauth/exchange', async (req, res) => {
   }
 });
 
+/// Server-side sign out.
+///
+/// "Disconnect GitHub" used to clear only the phone's stored token —
+/// the JWT stayed valid server-side for up to 30 days. Bumping this
+/// user's token_version invalidates every issued JWT instantly (the
+/// middleware's `ver` claim check), and dropping their device tokens
+/// stops FCM pushes to signed-out installs.
+///
+/// @route POST /auth/disconnect
+/// @returns {Object} { ok: true }
+authRouter.post('/auth/disconnect', requireAuth, async (req, res) => {
+  try {
+    await Promise.all([
+      query('update users set token_version = coalesce(token_version, 0) + 1 where id = $1', [req.userId]),
+      query('delete from device_tokens where user_id = $1', [req.userId]),
+    ]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Disconnect failed', err);
+    res.status(500).json({ error: 'Disconnect failed' });
+  }
+});
+
 /// Get the current authenticated user's profile.
 ///
-/// Fetches the user from the database using the session token,
-/// then gets their GitHub avatar via the GitHub API.
+/// Reads straight from the database: the avatar was persisted at
+/// sign-in, so /me is one query and never burns GitHub rate limit.
 ///
 /// @route GET /me
 /// @returns {Object} User profile
@@ -84,13 +113,11 @@ authRouter.get('/me', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     const userRow = result.rows[0];
-    const accessToken = decryptToken(userRow.access_token_encrypted);
-    const githubUser = await fetchGitHubUser(accessToken);
     res.json({
       id: userRow.id,
       github_id: Number(userRow.github_id),
       github_username: userRow.github_username,
-      avatar_url: githubUser.avatar_url,
+      avatar_url: userRow.avatar_url,
       created_at: userRow.created_at,
     });
   } catch (err) {

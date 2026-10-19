@@ -100,3 +100,37 @@ export async function fetchFileContent(accessToken, fullName, path) {
   if (!res.ok) return null;
   return res.text();
 }
+
+/// Fetch recent commits for a repository.
+///
+/// Pages through up to `maxPages` pages of 100 commits since `days` ago.
+/// Uses the user's token (5,000 req/hr) so this is comfortably cheap; the
+/// caller usually buckets results by day for the heatmap.
+///
+/// @param {string} accessToken - GitHub access token
+/// @param {string} fullName - Repository full name (owner/repo)
+/// @param {Object} opts
+/// @param {number} opts.days - Look-back window in days (default 30)
+/// @param {number} opts.maxPages - Max pages of 100 commits (default 3)
+/// @returns {Promise<Array>} Array of GitHub commit objects
+export async function fetchCommits(accessToken, fullName, { days = 30, maxPages = 3 } = {}) {
+  const since = new Date(Date.now() - days * 86_400_000).toISOString();
+  const commits = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const res = await fetch(
+      `${GITHUB_API}/repos/${fullName}/commits?since=${encodeURIComponent(since)}&per_page=100&page=${page}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/vnd.github+json',
+        },
+      },
+    );
+    if (!res.ok) break; // mirror the other fetchers: degrade gracefully
+    const batch = await res.json();
+    if (!Array.isArray(batch) || batch.length === 0) break;
+    commits.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return commits;
+}

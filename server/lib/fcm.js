@@ -8,6 +8,7 @@
 /// Requires Firebase Admin SDK initialization with a service account.
 
 import admin from 'firebase-admin';
+import { query } from '../db.js';
 
 let initialised = false;
 
@@ -23,7 +24,23 @@ function ensureInit() {
   initialised = true;
 }
 
+/// Identifies errors that mean the token is dead: the app was
+/// uninstalled, signed out, or FCM expired the registration. Stale
+/// tokens used to accumulate forever and error on every send.
+function isDeadToken(err) {
+  const code = err?.code ?? err?.errorInfo?.code ?? '';
+  return (
+    typeof code === 'string' &&
+    (code.includes('registration-token-not-registered') ||
+      code.includes('invalid-argument') ||
+      code.includes('unregistered'))
+  );
+}
+
 /// Sends a push notification to a device.
+///
+/// Kills the device_tokens row when FCM reports the token is dead so
+/// future notification fan-outs stop wasting attempts on it.
 ///
 /// @param {string} token - FCM device token
 /// @param {string} title - Notification title
@@ -33,6 +50,11 @@ export async function sendPush(token, title, body) {
   try {
     await admin.messaging().send({ token, notification: { title, body } });
   } catch (err) {
+    if (isDeadToken(err)) {
+      await query('delete from device_tokens where fcm_token = $1', [token]).catch(() => {});
+      return;
+    }
+    // Other failures (rate limits, transient) — keep the token, drop the send.
     console.error('FCM send failed', err);
   }
 }
