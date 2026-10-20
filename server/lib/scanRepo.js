@@ -106,8 +106,9 @@ async function runScan(repoRow, accessToken, onPhase) {
     query('select * from scan_results where repo_id = $1 order by scanned_at desc limit 1', [
       repoRow.id,
     ]),
-    // Settings are equal-opportunity optional: an unmigrated or
-    // abandoned DB costs the scan its preferences, not its head.
+    // Settings are best-effort: an unmigrated database missing the
+    // user_settings table must not take the whole pipeline down, so
+    // failures here collapse to the defaults below.
     query('select * from user_settings where user_id = $1', [repoRow.user_id]).catch(() => ({ rows: [] })),
   ]);
   const settings = userSettings.rows[0] ?? SETTINGS_DEFAULTS;

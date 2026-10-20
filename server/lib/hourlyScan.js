@@ -35,9 +35,6 @@ export async function runHourlyScan() {
       continue;
     }
     try {
-      // Only skim repos with a data-bearing user: a user who disabled
-      // notifications entirely still gets scans (feed/alerts), but the
-      // push path inside scanRepo reads their settings and stays quiet.
       const accessToken = decryptToken(repoRow.access_token_encrypted);
       await scanRepo(repoRow, accessToken);
       results.scanned += 1;

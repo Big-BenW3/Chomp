@@ -1,12 +1,18 @@
 /// Repository routes.
 ///
-/// Handles repository synchronization and watchlist management:
-/// - POST /github/sync-repos - Sync repos from GitHub
-/// - GET /repos - List all repos for the user
-/// - POST /repos/:id/watch - Add repo to watchlist
-/// - POST /repos/:id/unwatch - Remove repo from watchlist
-/// - GET /repos/:id/scans - Get scan history for a repo
-/// - GET /repos/:id/alerts - Get alerts for a repo
+/// Handles repository synchronization, watchlist management, and
+/// per-repo data reads. Every query joins through `repos.user_id`
+/// so a user can only ever touch their own rows.
+///
+/// - POST /github/sync-repos  - Sync repos from GitHub
+/// - GET  /repos              - List all repos for the user
+/// - POST /repos/:id/watch    - Add repo to watchlist
+/// - POST /repos/:id/unwatch  - Remove repo from watchlist
+/// - GET  /repos/:id/scans    - Scan history for a repo
+/// - GET  /repos/:id/alerts   - Alerts for a repo
+/// - POST /repos/:id/alerts/:alertId/resolve   - Mark an alert resolved
+/// - POST /repos/:id/alerts/:alertId/unresolve - Re-open an alert
+/// - GET  /repos/:id/commits  - Recent commit activity (day buckets)
 
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';

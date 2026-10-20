@@ -1,8 +1,14 @@
 /// Chomp design system.
 ///
-/// Tokens, motion curves and full component theming. Dark-first brand:
-/// near-black surfaces with a faint magenta cast, `#FF2D87` accent,
-/// Space Grotesk for display/numbers, Plus Jakarta Sans for body.
+/// Tokens, motion curves and full component theming — both the light
+/// and dark palettes are built from one `_build(Brightness)` pass, so
+/// a token change lands in both themes simultaneously.
+///
+/// Dark-first brand: near-black surfaces with a faint magenta cast,
+/// `#FF2D87` accent, Space Grotesk for display/numbers, Plus Jakarta
+/// Sans for body. Custom widgets should pull colors from `ColorScheme`
+/// or the `AppTokens` extension — never hardcode hex values outside
+/// this file, or light mode breaks.
 ///
 /// Motion philosophy: everything moves on the `appCurve` spring and
 /// only `transform`/`opacity` are ever animated — no layout thrash.

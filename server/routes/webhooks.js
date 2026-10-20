@@ -5,6 +5,20 @@ import { query } from '../db.js';
 const router = Router();
 const WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET;
 
+/// GitHub webhook receiver.
+///
+/// Ingests repository events GitHub POSTs to this endpoint and fans
+/// them out as feed items for every user who watches the repo:
+/// - `push`         → commit feed item
+/// - `pull_request` → pr feed item (opened/closed/merged/…)
+/// - `issues`       → issue feed item (opened/closed/…, PR-linked
+///   issues are skipped — they already arrived as pull_request events)
+///
+/// Security: verifies GitHub's HMAC-SHA256 signature over the raw
+/// request body before touching the DB. Handler failures are caught
+/// so a bad payload can't crash the server (Express 4 doesn't catch
+/// async rejections).
+
 /// Constant-time comparison to avoid timing attacks on the signature.
 function safeEqual(a, b) {
   const bufA = Buffer.from(a ?? '');

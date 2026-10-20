@@ -53,6 +53,12 @@ class ScanPhaseEvent {
 /// Opens an SSE connection to the backend and streams phase events
 /// back to the UI. The client never has access to the raw GitHub
 /// token or AI API keys — all processing happens server-side.
+///
+/// Wire format note: the server writes `: ping` comment lines every
+/// 15s to keep intermediaries (Render proxy) from idle-killing long
+/// AI calls. This parser only reacts to `event:`/`data:` lines plus
+/// blank event terminators, so heartbeat comments fall through
+/// harmlessly.
 class ScanEngine {
   final _api = ApiClient.instance;
 
@@ -83,7 +89,10 @@ class ScanEngine {
       String? eventName;
       final buffer = StringBuffer();
 
-      // Parse SSE format: "event: <name>\ndata: <json>\n\n"
+      // Parse SSE format:
+      //   ": ping\n\n"        → keepalive comment, ignored
+      //   "event: <name>\n"   → remember the event name
+      //   "data: <json>\n\n"  → emit one ScanPhaseEvent
       await for (final line in lines) {
         if (line.startsWith('event:')) {
           eventName = line.substring(6).trim();

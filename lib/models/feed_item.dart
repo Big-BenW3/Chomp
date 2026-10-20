@@ -25,9 +25,11 @@ extension FeedItemTypeX on FeedItemType {
 
 /// Individual feed item representing user activity.
 ///
-/// Displayed in the Feed tab of the app. Currently only populated
-/// automatically for scan completions; other types require webhook
-/// integration with GitHub.
+/// Feed items come from two sources:
+/// - The scan pipeline (`scan_complete` rows written by scanRepo.js)
+/// - GitHub webhooks (`commit`, `pr`, `issue` rows written by webhooks.js)
+///
+/// Displayed in the Feed tab of the app.
 class FeedItem {
   /// Unique identifier for this feed item.
   final String id;
@@ -68,10 +70,3 @@ class FeedItem {
       );
 }
 
-/// Feed item model representing an activity in the user's activity feed.
-///
-/// Feed items can be:
-/// - Scan completion notifications
-/// - GitHub commits (requires webhook integration - future)
-/// - Pull requests (requires webhook integration - future)
-/// - Issues (requires webhook integration - future)

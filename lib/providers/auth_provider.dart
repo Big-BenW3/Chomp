@@ -17,6 +17,11 @@ class AuthState {
   const AuthState({this.isLoading = false, this.user, this.error});
 
   /// Creates a copy of this state with optional field overrides.
+  ///
+  /// Note: [error] is intentionally NOT `?? this.error`. Copying
+  /// without an error always clears it, so success paths (`copyWith(
+  /// isLoading: false, user: user)`) don't need to remember to pass
+  /// `error: null`. Pass an error only when one genuinely occurred.
   AuthState copyWith({bool? isLoading, ChompUser? user, String? error}) =>
       AuthState(
         isLoading: isLoading ?? this.isLoading,

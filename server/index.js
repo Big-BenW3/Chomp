@@ -2,12 +2,16 @@
 ///
 /// Express server that provides the backend API for the Chomp app.
 /// Handles:
-/// - GitHub OAuth authentication
-/// - Repository synchronization
-/// - Manual scan triggers via SSE
-/// - Feed and alerts retrieval
+/// - GitHub OAuth authentication (sign-in, session revocation)
+/// - Server-backed user settings (notification preferences)
+/// - Repository synchronization and watchlist management
+/// - Manual scan triggers via SSE, hourly batch scans
+/// - Feed, alerts, alerts resolution, commit activity
 /// - FCM device token registration
-/// - Internal cron endpoint for hourly scans
+/// - GitHub webhooks (commits, PRs, issues)
+///
+/// Environment is validated at boot (assertRequiredSecrets) — the
+/// process refuses to start with partial configuration.
 ///
 /// Requires Node 18+ (uses global fetch).
 

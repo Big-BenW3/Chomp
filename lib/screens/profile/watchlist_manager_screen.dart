@@ -65,7 +65,7 @@ class WatchlistManagerScreen extends ConsumerWidget {
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 4),
                   Text(
-                    'Add repos below - Chomp will keep an eye on them hourly.',
+                    'Add repos below — Chomp will keep an eye on them hourly.',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: scheme.onSurface.withValues(alpha: 0.5),

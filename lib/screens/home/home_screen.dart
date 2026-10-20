@@ -36,6 +36,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     Future.microtask(() async {
+      // Boot sequence: paint the cached list first (instant, offline-
+      // friendly), then reconcile with GitHub (fresh list + auto-watch
+      // flags), then register this device for pushes once data exists.
       await ref.read(repoProvider.notifier).loadFromCache();
       await ref.read(repoProvider.notifier).syncFromGitHub();
       await FcmService().init();

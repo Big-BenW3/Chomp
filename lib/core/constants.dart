@@ -1,3 +1,12 @@
+/// Core application constants and API endpoint definitions.
+///
+/// One home for static values shared across the client: watchlist
+/// limits (mirroring `server/lib/constants.js`) and every backend
+/// route path the app talks to. Keep both halves in sync with the
+/// server's route definitions in `server/routes/`.
+
+library;
+
 class AppConstants {
   /// Number of most recently active repos automatically added to watchlist.
   static const autoWatchCount = 3;
@@ -32,9 +41,3 @@ class ApiEndpoints {
   static const me = '/me';
 }
 
-/// Core application constants and API endpoint definitions.
-///
-/// This file contains static configuration values used throughout the
-/// Chomp app, including watchlist limits, scan intervals, and the
-/// backend API route paths. Keep this in sync with the server's
-/// route definitions in `server/routes/`.

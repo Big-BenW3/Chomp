@@ -7,6 +7,18 @@
 /// Uses a 256-bit key derived from the CRYPTO_SECRET environment
 /// variable. The key must be exactly 32 bytes (256 bits) for AES-256.
 
+// AES-256-GCM here because GitHub access tokens are high-value
+// credentials: GCM gives confidentiality + integrity (tampering with
+// the ciphertext fails the authTag check), and the random 96-bit IV
+// means encrypting the same token twice yields different ciphertexts
+// (no equal-plaintext leakage across rows).
+//
+// Storage layout (before base64): iv(12) | authTag(16) | ciphertext.
+// The key is SHA-256 of CRYPTO_SECRET — not a memory-hard KDF, but the
+// secret is a 32-byte random string, not a password, so offline brute
+// force isn't the threat model. Rotating CRYPTO_SECRET invalidates
+// every stored token (users must reconnect).
+
 import crypto from 'crypto';
 
 /// Derives a 256-bit encryption key from the environment secret.

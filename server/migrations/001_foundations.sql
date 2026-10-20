@@ -14,8 +14,21 @@
 --    user_settings makes them real: the scan pipeline reads from here.
 
 -- 1. Per-user repo uniqueness -------------------------------------------
+-- Conditional so this file works both on legacy databases (which need
+-- the constraint swap) and fresh ones (where 000_base_schema.sql already
+-- created the per-user unique; adding it twice would fail).
 alter table repos drop constraint if exists repos_github_repo_id_key;
-alter table repos add unique (user_id, github_repo_id);
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'repos_user_id_github_repo_id_key'
+      and conrelid = 'repos'::regclass
+  ) then
+    alter table repos
+      add constraint repos_user_id_github_repo_id_key unique (user_id, github_repo_id);
+  end if;
+end $$;
 create index if not exists idx_repos_user_github_id on repos(user_id, github_repo_id);
 
 -- 2. AI reasoning --------------------------------------------------------
